@@ -209,7 +209,7 @@ export default function Contact() {
                 <h3 className="font-semibold text-lg text-blue-900 mb-4">Find Us on Map</h3>
                 <div className="rounded-lg overflow-hidden shadow-lg">
                   <iframe
-                    src="https://www.google.co.th/maps/place/Asoke+Prasanmit+Computer+Co.,+Ltd./@13.7213594,100.6379666,17z/data=!3m1!4b1!4m6!3m5!1s0x311d60364b364d93:0x204f0507ed39338!8m2!3d13.7213594!4d100.6405415!16s%2Fg%2F1tfhx13l?entry=ttu&g_ep=EgoyMDI2MDIxNy4wIKXMDSoASAFQAw%3D%3D"
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3875.9518565031635!2d100.63796657573114!3d13.721364597996185!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x311d60364b364d93%3A0x204f0507ed39338!2sAsoke%20Prasanmit%20Computer%20Co.%2C%20Ltd.!5e0!3m2!1sen!2sth!4v1773121915005!5m2!1sen!2sth"
                     width="100%"
                     height="300"
                     style={{ border: 0 }}
