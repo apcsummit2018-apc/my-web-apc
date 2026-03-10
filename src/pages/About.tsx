@@ -19,7 +19,7 @@ export default function About() {
               <h2 className="text-4xl font-bold text-blue-900 mb-6">Our Story</h2>
               <div className="space-y-4 text-gray-700 leading-relaxed">
                 <p>
-                  Founded in 1997, ASOKE PRASANMIT COMPUTER.CO.,LTD has been serving the Bangkok community with exceptional IT support and computer services for over a decade.
+                  
                 </p>
                 <p>
                   What started as a small computer repair shop has grown into a comprehensive IT solutions provider, trusted by hundreds of businesses and individuals throughout the region.

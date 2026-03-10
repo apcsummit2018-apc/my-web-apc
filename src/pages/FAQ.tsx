@@ -12,12 +12,21 @@ export default function FAQ() {
   }, []);
 
   const fetchFAQs = async () => {
-    const { data } = await supabase
-      .from('faqs')
-      .select('*')
-      .eq('is_active', true)
-      .order('display_order');
-    if (data) setFaqs(data);
+    try {
+      const { data, error } = await supabase
+        .from('faqs')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order');
+
+      console.log("Supabase Data:", data);
+      console.log("Supabase Error:", error);
+
+      if (error) throw error;
+      if (data) setFaqs(data);
+    } catch (err: any) {
+      console.error("เกิดข้อผิดพลาดในการดึงข้อมูล:", err.message);
+    }
   };
 
   const categories = ['All', ...Array.from(new Set(faqs.map(faq => faq.category)))];
