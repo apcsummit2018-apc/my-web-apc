@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { ShoppingCart } from 'lucide-react';
 import { supabase, Product, Category } from '../lib/supabase';
+import { useCart } from '../contexts/CartContext'; // เพิ่มการนำเข้า Context
 
 export default function Shop() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // เรียกใช้งาน addToCart จาก Context
+  const { addToCart } = useCart();
 
   useEffect(() => {
     fetchCategories();
@@ -39,6 +43,12 @@ export default function Shop() {
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // ฟังก์ชันจัดการตอนกดเพิ่มลงตะกร้า
+  const handleAddToCart = (product: Product) => {
+    addToCart(product);
+    alert(`เพิ่ม "${product.name}" ลงตะกร้าแล้ว! 🛒`); // แสดงแจ้งเตือนให้ลูกค้ารู้
+  };
 
   return (
     <div>
@@ -114,8 +124,11 @@ export default function Shop() {
                         {product.stock_quantity} available
                       </span>
                     </div>
+                    
+                    {/* เปลี่ยนปุ่มเป็น Add to Cart */}
                     <button
                       disabled={product.stock_quantity === 0}
+                      onClick={() => handleAddToCart(product)}
                       className={`w-full py-2 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-colors ${
                         product.stock_quantity === 0
                           ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -123,8 +136,9 @@ export default function Shop() {
                       }`}
                     >
                       <ShoppingCart className="h-5 w-5" />
-                      <span>{product.stock_quantity === 0 ? 'Out of Stock' : 'Inquire'}</span>
+                      <span>{product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}</span>
                     </button>
+
                   </div>
                 </div>
               ))}

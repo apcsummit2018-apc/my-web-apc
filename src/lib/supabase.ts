@@ -62,3 +62,28 @@ export interface FAQ {
   is_active: boolean;
   created_at: string;
 }
+
+export interface Order {
+  id: string;
+  user_id?: string;
+  customer_name: string;
+  email: string;
+  phone: string;
+  shipping_address: string;
+  total_amount: number;
+  status: string;
+  payment_method: string;
+  payment_slip_url?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  created_at: string;
+}
