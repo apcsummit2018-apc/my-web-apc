@@ -113,10 +113,10 @@ export default function FAQ() {
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <a
-              href="tel:02-123-4567"
+              href="tel:02-321-9939"
               className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
             >
-              Call Us: 02-123-4567
+              Call Us: 02-321-9939
             </a>
             <a
               href="/contact"

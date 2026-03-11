@@ -142,10 +142,10 @@ export default function Shop() {
             </p>
             <div className="flex flex-wrap gap-4">
               <a
-                href="tel:02-123-4567"
+                href="tel:02-321-9939"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
               >
-                Call: 02-123-4567
+                Call: 02-321-9939
               </a>
               <a
                 href="/contact"
