@@ -1,3 +1,4 @@
+import toast from 'react-hot-toast';
 import { useEffect, useState } from 'react';
 import { ShoppingCart, Search, Filter, X, CheckCircle } from 'lucide-react';
 import { supabase, Product, Category } from '../lib/supabase';
@@ -42,11 +43,12 @@ export default function Shop() {
     return matchesSearch && matchesCategory;
   });
 
-  const handleAddToCart = (product: Product) => {
-    // ส่งตัวแปร product เข้าไปทั้งก้อนเลยครับ
+const handleAddToCart = (product: Product) => {
     addToCart(product); 
     
-    alert(`เพิ่ม ${product.name} ลงตะกร้าแล้ว! 🛒`);
+    // เปลี่ยนจาก alert(...) เป็นแบบนี้ครับ
+    toast.success(`เพิ่ม ${product.name} ลงตะกร้าแล้ว! 🛒`);
+    
     setSelectedProduct(null);
   };
 

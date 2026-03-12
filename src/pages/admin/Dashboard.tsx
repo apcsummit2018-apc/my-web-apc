@@ -16,7 +16,7 @@ interface ContactMessage {
 }
 
 export default function AdminDashboard() {
-  const { user, signOut } = useAuth();
+ 
   const navigate = useNavigate();
   
   const [products, setProducts] = useState<Product[]>([]);
@@ -42,17 +42,25 @@ export default function AdminDashboard() {
   const [adminMessage, setAdminMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+ const { user, role, loading: authLoading, signOut } = useAuth(); // ดึง role และ authLoading มาใช้
+
   useEffect(() => {
-    if (!user) {
-      navigate('/admin');
-    } else {
-      fetchProducts();
-      fetchCategories();
-      fetchMessages();
-      fetchOrders();
-      fetchChatSessions();
+    if (!authLoading) { // รอให้โหลดข้อมูล User/Role เสร็จก่อน
+      if (!user || role !== 'admin') {
+        alert('คุณไม่มีสิทธิ์เข้าถึงหน้านี้!');
+        navigate('/'); // ดีดกลับหน้าแรก
+      } else {
+        fetchProducts();
+        fetchCategories();
+        fetchMessages();
+        fetchOrders();
+        fetchChatSessions();
+      }
     }
-  }, [user, navigate]);
+  }, [user, role, authLoading, navigate]);
+
+  // ถ้ากำลังโหลด ให้โชว์หน้าจอว่างๆ หรือ Loading ไปก่อน
+  if (authLoading) return <div className="p-8 text-center">กำลังตรวจสอบสิทธิ์...</div>;
 
   const fetchProducts = async () => {
     const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
@@ -94,18 +102,28 @@ export default function AdminDashboard() {
     }
   };
 
-  // Realtime ฝั่ง Admin
+// Realtime ฝั่ง Admin
   useEffect(() => {
+    // 1. โหลดไฟล์เสียงแจ้งเตือน (ใช้ไฟล์เสียงฟรีจากเน็ต)
+const notifySound = new Audio('https://assets.mixkit.co/active_storage/sfx/3005/3005-preview.mp3');
     const subscription = supabase
       .channel('admin_chat_updates')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
         const newMsg = payload.new;
         
+        // 2. ถ้าข้อความใหม่ส่งมาจาก 'customer' (ลูกค้า) ให้เล่นเสียงเตือน!
+        if (newMsg.sender === 'customer') {
+          // ใช้ catch ดักไว้เผื่อกรณีที่เบราว์เซอร์บล็อกการเล่นเสียงอัตโนมัติ
+          notifySound.play().catch((err) => console.log('เบราว์เซอร์ยังไม่อนุญาตให้เล่นเสียง:', err));
+        }
+
+        // อัปเดตรายชื่อแชทฝั่งซ้าย
         setChatSessions(prev => {
           const filtered = prev.filter(s => s.session_id !== newMsg.session_id);
           return [{ session_id: newMsg.session_id, latest_message: newMsg.message, updated_at: newMsg.created_at }, ...filtered];
         });
 
+        // อัปเดตข้อความในห้องแชทฝั่งขวา (ถ้ากำลังเปิดห้องนั้นอยู่)
         if (selectedChatSession === newMsg.session_id) {
            setChatMessages(prev => {
              if (prev.find(m => m.id === newMsg.id)) return prev;

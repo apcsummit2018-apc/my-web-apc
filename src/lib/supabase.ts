@@ -7,7 +7,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// ปรับปรุงการสร้าง Client ให้เสถียรขึ้นเพื่อแก้หน้าจอค้าง
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
+
+// --- Interfaces (โครงสร้างข้อมูลเดิมของคุณ) ---
 
 export interface Category {
   id: string;

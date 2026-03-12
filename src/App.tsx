@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast'
 import Layout from './components/Layout';
 import Home from './pages/Home';
 import Services from './pages/Services';
@@ -40,6 +41,7 @@ function App() {
           <Route path="/my-orders" element={<Layout><MyOrders /></Layout>} /> {/* <-- เส้นทางนี้ที่หายไปครับ */}
         </Routes>
       </BrowserRouter>
+      <Toaster position="top-center" reverseOrder={false} />
     </CartProvider>
   );
 }

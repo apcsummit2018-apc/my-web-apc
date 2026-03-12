@@ -4,9 +4,10 @@ import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
+  role: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>; // เพิ่มบรรทัดนี้แล้ว
+  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -14,16 +15,53 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+  // ฟังก์ชันดึงข้อมูล Role จากตาราง profiles
+  const fetchUserRole = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      if (error) throw error;
+      return data?.role || 'customer';
+    } catch (err) {
+      console.error('Error fetching role:', err);
+      return 'customer'; // ถ้าผิดพลาดให้เป็น customer ไว้ก่อน
+    }
+  };
+
+  useEffect(() => {
+    // ตรวจสอบ Session เมื่อโหลดหน้าเว็บครั้งแรก
+    const initializeAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        setUser(session.user);
+        const userRole = await fetchUserRole(session.user.id);
+        setRole(userRole);
+      }
+      
+      setLoading(false);
+    };
+
+    initializeAuth();
+
+    // ติดตามการเปลี่ยนแปลงสถานะการล็อกอิน (Login / Logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        const userRole = await fetchUserRole(session.user.id);
+        setRole(userRole);
+      } else {
+        setUser(null);
+        setRole(null);
+      }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -34,7 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  // เพิ่มฟังก์ชัน signUp ตรงนี้แล้ว
   const signUp = async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
@@ -46,8 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    // ส่ง signUp ออกไปให้ไฟล์ Login ใช้งาน
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, role, loading, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
