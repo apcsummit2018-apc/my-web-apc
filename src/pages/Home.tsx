@@ -75,6 +75,12 @@ export default function Home() {
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
+            {/* แทรกโลโก้ตรงนี้ครับ กำหนดขนาดความสูง (h-32) และให้อยู่ตรงกลาง (mx-auto) */}
+            <img 
+              src="https://isxrydkjptevrusbfcvu.supabase.co/storage/v1/object/public/product/Picture/1773125393675.jpg" 
+              alt="Company Logo" 
+              className="h-128 object-contain mx-auto mb-24 rounded-lg shadow-sm"
+            />
             <h2 className="text-4xl font-bold text-blue-900 mb-4">Why Choose Us?</h2>
             <p className="text-xl text-gray-600">Trusted by hundreds of clients across Bangkok</p>
           </div>

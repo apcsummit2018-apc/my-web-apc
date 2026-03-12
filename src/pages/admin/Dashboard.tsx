@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-// เพิ่มนำเข้าไอคอน Eye (ดูรายละเอียด) และ X (ปิดหน้าต่าง)
-import { LogOut, Plus, Edit, Trash2, Package, MessageSquare, ShoppingCart, Eye, X } from 'lucide-react'; 
+import { LogOut, Plus, Edit, Trash2, Package, MessageSquare, ShoppingCart, Eye, X, MessageCircle, Send } from 'lucide-react'; 
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, Product, Category, Order } from '../../lib/supabase'; 
 import ProductModal from '../../components/ProductModal';
@@ -27,13 +26,21 @@ export default function AdminDashboard() {
 
   const [messages, setMessages] = useState<ContactMessage[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [activeTab, setActiveTab] = useState<'products' | 'messages' | 'orders'>('orders');
+  
+  // เปิดมาเจอหน้า Live Chat ก่อน
+  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'messages' | 'livechat'>('livechat');
 
-  // State สำหรับ Modal รายละเอียดคำสั่งซื้อ
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<any[]>([]);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
+
+  // --- State สำหรับระบบ Live Chat ---
+  const [chatSessions, setChatSessions] = useState<{session_id: string, latest_message: string, updated_at: string}[]>([]);
+  const [selectedChatSession, setSelectedChatSession] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [adminMessage, setAdminMessage] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!user) {
@@ -43,6 +50,7 @@ export default function AdminDashboard() {
       fetchCategories();
       fetchMessages();
       fetchOrders();
+      fetchChatSessions();
     }
   }, [user, navigate]);
 
@@ -66,45 +74,118 @@ export default function AdminDashboard() {
     if (data) setOrders(data);
   };
 
+  // ดึงประวัติห้องแชท
+  const fetchChatSessions = async () => {
+    const { data } = await supabase
+      .from('chat_messages')
+      .select('*')
+      .order('created_at', { ascending: false });
+      
+    if (data) {
+      const sessions: any[] = [];
+      const seen = new Set();
+      data.forEach((msg) => {
+        if (!seen.has(msg.session_id)) {
+          seen.add(msg.session_id);
+          sessions.push({ session_id: msg.session_id, latest_message: msg.message, updated_at: msg.created_at });
+        }
+      });
+      setChatSessions(sessions);
+    }
+  };
+
+  // Realtime ฝั่ง Admin
+  useEffect(() => {
+    const subscription = supabase
+      .channel('admin_chat_updates')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => {
+        const newMsg = payload.new;
+        
+        setChatSessions(prev => {
+          const filtered = prev.filter(s => s.session_id !== newMsg.session_id);
+          return [{ session_id: newMsg.session_id, latest_message: newMsg.message, updated_at: newMsg.created_at }, ...filtered];
+        });
+
+        if (selectedChatSession === newMsg.session_id) {
+           setChatMessages(prev => {
+             if (prev.find(m => m.id === newMsg.id)) return prev;
+             return [...prev, newMsg];
+           });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [selectedChatSession]);
+
+  // โหลดข้อความในแชท
+  useEffect(() => {
+    if (!selectedChatSession) return;
+    const loadMessages = async () => {
+      const { data } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('session_id', selectedChatSession)
+        .order('created_at', { ascending: true });
+      if (data) setChatMessages(data);
+    };
+    loadMessages();
+  }, [selectedChatSession]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  const handleSendAdminMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminMessage.trim() || !selectedChatSession) return;
+    const msgText = adminMessage.trim();
+    setAdminMessage('');
+
+    const { data, error } = await supabase.from('chat_messages').insert([{
+      session_id: selectedChatSession,
+      sender: 'admin',
+      message: msgText
+    }]).select();
+
+    if (!error && data) {
+       setChatMessages(prev => {
+         if (prev.find(m => m.id === data[0].id)) return prev;
+         return [...prev, data[0]];
+       });
+    }
+  };
+
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
     const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
     if (!error) {
       alert('อัปเดตสถานะสำเร็จ!');
       fetchOrders();
-    } else {
-      alert('เกิดข้อผิดพลาดในการอัปเดตสถานะ');
-      console.error(error);
     }
   };
 
-  // ฟังก์ชันสำหรับดึงรายการสินค้าในใบสั่งซื้อ เมื่อกดปุ่มดูรายละเอียด
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบคำสั่งซื้อนี้?')) return;
+    const { error } = await supabase.from('orders').delete().eq('id', orderId);
+    if (!error) {
+      alert('ลบคำสั่งซื้อสำเร็จ!');
+      fetchOrders(); 
+    }
+  };
+
   const handleViewOrder = async (order: Order) => {
     setSelectedOrder(order);
     setIsOrderModalOpen(true);
     setLoadingOrderDetails(true);
 
-    // ดึงข้อมูลรายการสินค้า (order_items) พร้อมเชื่อม (Join) กับตาราง products เพื่อเอาชื่อและรูปภาพ
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('order_items')
-      .select(`
-        id,
-        quantity,
-        unit_price,
-        product_id,
-        products (
-          name,
-          image_url
-        )
-      `)
+      .select(`id, quantity, unit_price, product_id, products (name, image_url)`)
       .eq('order_id', order.id);
 
-    if (data) {
-      setOrderItems(data);
-    } else {
-      console.error('Error fetching order items:', error);
-      setOrderItems([]);
-    }
-    
+    if (data) setOrderItems(data);
     setLoadingOrderDetails(false);
   };
 
@@ -165,7 +246,14 @@ export default function AdminDashboard() {
             </button>
           </div>
           
-          <div className="flex space-x-4 mt-8 border-b border-blue-800 pb-[-1px]">
+          <div className="flex space-x-4 mt-8 border-b border-blue-800 pb-[-1px] overflow-x-auto">
+            <button onClick={() => setActiveTab('livechat')} className={`pb-3 px-4 text-lg font-medium flex items-center space-x-2 border-b-4 transition-colors whitespace-nowrap ${activeTab === 'livechat' ? 'border-white text-white' : 'border-transparent text-blue-300 hover:text-white'}`}>
+              <MessageCircle className="h-5 w-5" />
+              <span>Live Chat</span>
+              {chatSessions.length > 0 && (
+                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full ml-1">{chatSessions.length}</span>
+              )}
+            </button>
             <button onClick={() => setActiveTab('orders')} className={`pb-3 px-4 text-lg font-medium flex items-center space-x-2 border-b-4 transition-colors ${activeTab === 'orders' ? 'border-white text-white' : 'border-transparent text-blue-300 hover:text-white'}`}>
               <ShoppingCart className="h-5 w-5" />
               <span>Orders</span>
@@ -181,7 +269,7 @@ export default function AdminDashboard() {
             </button>
             <button onClick={() => setActiveTab('messages')} className={`pb-3 px-4 text-lg font-medium flex items-center space-x-2 border-b-4 transition-colors ${activeTab === 'messages' ? 'border-white text-white' : 'border-transparent text-blue-300 hover:text-white'}`}>
               <MessageSquare className="h-5 w-5" />
-              <span>Messages</span>
+              <span>Form Messages</span>
               {messages.length > 0 && (
                 <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full ml-2">
                   {messages.length}
@@ -193,8 +281,108 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* ------------ TAB: ใบสั่งซื้อ (Orders) ------------ */}
+
+        {/* ------------ TAB: Live Chat ------------ */}
+        {activeTab === 'livechat' && (
+          <div className="bg-white rounded-lg shadow-md overflow-hidden flex flex-col md:flex-row border border-gray-200" style={{ height: '650px' }}>
+            {/* ฝั่งซ้าย: รายชื่อคนแชท */}
+            <div className="w-full md:w-1/3 border-r border-gray-200 bg-gray-50 flex flex-col h-full">
+              <div className="p-4 border-b border-gray-200 bg-white">
+                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5 text-blue-600"/> รายการแชทลูกค้า
+                </h3>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {chatSessions.length === 0 ? (
+                  <div className="text-center p-8 text-gray-400 text-sm">ยังไม่มีข้อความจากลูกค้า</div>
+                ) : (
+                  chatSessions.map(session => (
+                    <div 
+                      key={session.session_id} 
+                      onClick={() => setSelectedChatSession(session.session_id)}
+                      className={`p-4 border-b cursor-pointer transition-colors ${selectedChatSession === session.session_id ? 'bg-blue-50 border-l-4 border-blue-600' : 'hover:bg-gray-100 border-l-4 border-transparent'}`}
+                    >
+                      <div className="font-semibold text-sm text-gray-900 mb-1 flex justify-between items-center">
+                         <span>{session.session_id.startsWith('guest_') ? 'ผู้เยี่ยมชม (Guest)' : 'สมาชิก (Member)'}</span>
+                         <span className="text-xs text-gray-500 font-normal">
+                           {new Date(session.updated_at).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'})}
+                         </span>
+                      </div>
+                      <div className="text-xs text-gray-400 truncate mb-2">ID: {session.session_id}</div>
+                      <div className="text-sm text-gray-700 truncate">{session.latest_message}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* ฝั่งขวา: ห้องสนทนา */}
+            <div className="w-full md:w-2/3 flex flex-col bg-white h-full">
+              {selectedChatSession ? (
+                <>
+                  <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-white shadow-sm z-10">
+                    <div>
+                      <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        กำลังคุยกับ: {selectedChatSession.startsWith('guest_') ? 'ผู้เยี่ยมชม (Guest)' : 'สมาชิก (Member)'}
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-1">ID: {selectedChatSession}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 p-6 overflow-y-auto bg-gray-50 space-y-4">
+                    {chatMessages.map(msg => (
+                      <div key={msg.id} className={`flex flex-col ${msg.sender === 'admin' ? 'items-end' : 'items-start'}`}>
+                        <span className="text-[10px] text-gray-500 mb-1 px-1 font-medium">
+                          {msg.sender === 'admin' ? 'แอดมิน (คุณ)' : 'ลูกค้า'}
+                        </span>
+                        <div className={`max-w-[75%] rounded-2xl px-5 py-3 text-sm shadow-sm ${
+                          msg.sender === 'admin' 
+                            ? 'bg-blue-600 text-white rounded-br-sm' 
+                            : 'bg-white text-gray-800 rounded-bl-sm border border-gray-100'
+                        }`}>
+                          {msg.message}
+                          <div className={`text-[10px] mt-1 text-right ${msg.sender === 'admin' ? 'text-blue-200' : 'text-gray-400'}`}>
+                            {new Date(msg.created_at).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'})}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  <form onSubmit={handleSendAdminMessage} className="p-4 border-t border-gray-200 bg-white flex gap-3">
+                    <input
+                      type="text"
+                      value={adminMessage}
+                      onChange={(e) => setAdminMessage(e.target.value)}
+                      placeholder="พิมพ์ข้อความตอบกลับลูกค้า..."
+                      className="flex-1 bg-gray-50 border border-gray-300 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-xl px-4 py-3 outline-none transition-all"
+                    />
+                    <button 
+                      type="submit" 
+                      disabled={!adminMessage.trim()}
+                      className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2 font-medium shadow-md hover:shadow-lg"
+                    >
+                      <span className="hidden sm:inline">ส่งข้อความ</span>
+                      <Send className="h-5 w-5" />
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
+                  <div className="bg-white p-6 rounded-full shadow-sm mb-4">
+                    <MessageCircle className="h-16 w-16 text-blue-200" />
+                  </div>
+                  <p className="font-medium text-gray-500">เลือกรายการแชทด้านซ้ายเพื่อเริ่มสนทนากับลูกค้า</p>
+                </div>
+              )}
+            </div>
+            
+          </div>
+        )}
+
+        {/* ------------ TAB: Orders ------------ */}
         {activeTab === 'orders' && (
           <div>
             <div className="mb-8 flex items-center space-x-3">
@@ -250,17 +438,25 @@ export default function AdminDashboard() {
                               <option value="completed">เสร็จสิ้น</option>
                               <option value="cancelled">ยกเลิก</option>
                             </select>
-                            {getStatusBadge(order.status)}
+                            <div className="mt-2">{getStatusBadge(order.status)}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                            {/* ปุ่มสำหรับดูรายละเอียด */}
-                            <button 
-                              onClick={() => handleViewOrder(order)}
-                              className="bg-blue-100 hover:bg-blue-200 text-blue-700 p-2 rounded inline-flex items-center justify-center transition-colors"
-                              title="View Details"
-                            >
-                              <Eye className="h-5 w-5" />
-                            </button>
+                            <div className="flex items-center justify-center space-x-2">
+                              <button 
+                                onClick={() => handleViewOrder(order)}
+                                className="bg-blue-100 hover:bg-blue-200 text-blue-700 p-2 rounded inline-flex items-center justify-center transition-colors"
+                                title="View Details"
+                              >
+                                <Eye className="h-5 w-5" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteOrder(order.id)}
+                                className="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded inline-flex items-center justify-center transition-colors"
+                                title="Delete Order"
+                              >
+                                <Trash2 className="h-5 w-5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -272,7 +468,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* ------------ TAB: สินค้า และ ข้อความ (ซ่อนไว้ให้สั้นลง แต่ทำงานเหมือนเดิม) ------------ */}
+        {/* ------------ TAB: Products ------------ */}
         {activeTab === 'products' && (
           <div>
             <div className="mb-8 flex justify-between items-center">
@@ -327,6 +523,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* ------------ TAB: Form Messages ------------ */}
         {activeTab === 'messages' && (
           <div>
             <div className="mb-8 flex items-center space-x-3">
@@ -364,17 +561,14 @@ export default function AdminDashboard() {
 
       </main>
 
-      {/* Modal แก้ไขสินค้า (ของเดิม) */}
+      {/* Modal แก้ไขสินค้า */}
       {isModalOpen && <ProductModal product={editingProduct} categories={categories} onClose={handleModalClose} />}
 
-      {/* ------------------------------------------------------------- */}
-      {/* ---------------- Modal แสดงรายละเอียดใบสั่งซื้อ ---------------- */}
-      {/* ------------------------------------------------------------- */}
+      {/* Modal แสดงรายละเอียดใบสั่งซื้อ */}
       {isOrderModalOpen && selectedOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             
-            {/* หัวข้อ Modal */}
             <div className="flex justify-between items-center p-6 border-b bg-gray-50">
               <div>
                 <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2">
@@ -388,8 +582,6 @@ export default function AdminDashboard() {
             </div>
             
             <div className="p-6 overflow-y-auto flex-1">
-              
-              {/* ข้อมูลลูกค้าและที่อยู่ */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
                   <h3 className="font-bold text-blue-900 mb-3 border-b border-blue-200 pb-2">ข้อมูลลูกค้าติดต่อ</h3>
@@ -408,7 +600,6 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* ตารางแสดงอุปกรณ์/สินค้าที่สั่ง */}
               <h3 className="font-bold text-lg text-gray-900 mb-4">รายการสินค้า/อุปกรณ์</h3>
               {loadingOrderDetails ? (
                 <div className="text-center py-8 text-gray-500">กำลังโหลดข้อมูลอุปกรณ์...</div>
@@ -452,7 +643,6 @@ export default function AdminDashboard() {
                 </div>
               )}
               
-              {/* สรุปยอดรวมด้านล่าง */}
               <div className="mt-6 p-4 bg-green-50 border border-green-100 rounded-lg flex justify-end items-center">
                 <span className="text-gray-700 font-semibold mr-4">ยอดชำระเงินสุทธิ:</span>
                 <span className="text-2xl font-bold text-green-700">฿{selectedOrder.total_amount.toLocaleString()}</span>
