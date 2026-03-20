@@ -1,8 +1,8 @@
-import toast from 'react-hot-toast';
 import { useEffect, useState } from 'react';
 import { ShoppingCart, Search, Filter, X, CheckCircle } from 'lucide-react';
 import { supabase, Product, Category } from '../lib/supabase';
 import { useCart } from '../contexts/CartContext';
+import toast from 'react-hot-toast';
 
 export default function Shop() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -10,51 +10,64 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
-  
-  // State สำหรับหน้าต่างรายละเอียดสินค้า
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   const { addToCart } = useCart();
 
   useEffect(() => {
-    fetchProducts();
-    fetchCategories();
+    // โหลดข้อมูลทั้งหมดให้เสร็จทีเดียว แล้วค่อยปิดการหมุน (Loading)
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchProducts(), fetchCategories()]);
+      } catch (error) {
+        console.error("เกิดข้อผิดพลาดในการดึงข้อมูลหน้า Shop:", error);
+      } finally {
+        setLoading(false); // บังคับหยุดหมุนเสมอ 100% ไม่ว่าจะเกิดอะไรขึ้น
+      }
+    };
+    
+    loadData();
   }, []);
 
   const fetchProducts = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('products')
       .select('*')
       .eq('is_active', true)
       .order('created_at', { ascending: false });
+      
+    if (error) {
+      console.error("Error fetching products:", error.message);
+      throw error;
+    }
     if (data) setProducts(data);
-    setLoading(false);
   };
 
   const fetchCategories = async () => {
-    const { data } = await supabase.from('categories').select('*').order('name');
+    const { data, error } = await supabase.from('categories').select('*').order('name');
+    if (error) {
+      console.error("Error fetching categories:", error.message);
+      throw error;
+    }
     if (data) setCategories(data);
   };
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          product.description?.toLowerCase().includes(searchTerm.toLowerCase());
+                          (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = selectedCategory ? product.category_id === selectedCategory : true;
     return matchesSearch && matchesCategory;
   });
 
-const handleAddToCart = (product: Product) => {
-    addToCart(product); 
-    
-    // เปลี่ยนจาก alert(...) เป็นแบบนี้ครับ
+  const handleAddToCart = (product: Product) => {
+    addToCart(product);
     toast.success(`เพิ่ม ${product.name} ลงตะกร้าแล้ว! 🛒`);
-    
     setSelectedProduct(null);
   };
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      {/* ---------------- แบนเนอร์สีเขียวที่กลับมาแล้ว ---------------- */}
       <div className="bg-green-500 py-16 text-white text-center shadow-inner">
         <h1 className="text-4xl md:text-5xl font-bold mb-4">ร้านคอมพิวเตอร์</h1>
         <p className="text-lg md:text-xl max-w-3xl mx-auto px-4 text-green-50">
@@ -66,7 +79,6 @@ const handleAddToCart = (product: Product) => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <h2 className="text-2xl font-bold text-gray-800">สินค้าทั้งหมด</h2>
           
-          {/* ค้นหาและตัวกรอง */}
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
@@ -75,7 +87,7 @@ const handleAddToCart = (product: Product) => {
                 placeholder="ค้นหาสินค้า..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none w-full sm:w-64"
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none w-full sm:w-64"
               />
             </div>
             <div className="relative">
@@ -83,7 +95,7 @@ const handleAddToCart = (product: Product) => {
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none appearance-none bg-white"
+                className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none appearance-none bg-white"
               >
                 <option value="">ทุกหมวดหมู่</option>
                 {categories.map(cat => (
@@ -94,7 +106,6 @@ const handleAddToCart = (product: Product) => {
           </div>
         </div>
 
-        {/* รายการสินค้า */}
         {loading ? (
           <div className="text-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto"></div>
@@ -102,7 +113,7 @@ const handleAddToCart = (product: Product) => {
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-lg border">
-            <p className="text-gray-500 text-lg">ไม่พบสินค้าที่คุณค้นหา</p>
+            <p className="text-gray-500 text-lg">ไม่พบสินค้าที่คุณค้นหา หรือยังไม่มีสินค้าในระบบ</p>
             <button onClick={() => {setSearchTerm(''); setSelectedCategory('');}} className="mt-4 text-green-600 hover:underline">
               ดูสินค้าทั้งหมด
             </button>
@@ -115,6 +126,7 @@ const handleAddToCart = (product: Product) => {
                   <img
                     src={product.image_url || 'https://via.placeholder.com/300'}
                     alt={product.name}
+                    loading="lazy"
                     className="w-full h-full object-contain p-4 group-hover:scale-105 transition-transform duration-300"
                   />
                   {product.stock_quantity === 0 && (
@@ -134,7 +146,6 @@ const handleAddToCart = (product: Product) => {
                     <button
                       onClick={() => setSelectedProduct(product)}
                       className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-colors"
-                      title="ดูรายละเอียดสินค้า"
                     >
                       <ShoppingCart className="h-5 w-5" />
                     </button>
@@ -146,7 +157,7 @@ const handleAddToCart = (product: Product) => {
         )}
       </div>
 
-      {/* ---------------- Modal รายละเอียดสินค้า ---------------- */}
+      {/* Modal รายละเอียดสินค้า */}
       {selectedProduct && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fadeIn backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col md:flex-row relative">

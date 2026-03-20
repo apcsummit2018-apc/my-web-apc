@@ -1,24 +1,20 @@
 import { ReactNode } from 'react';
 import Header from './Header';
 import Footer from './Footer';
-// 1. นำเข้า ChatWidget
-import ChatWidget from './ChatWidget';
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
-      <main className="flex-grow">
+      <main className="flex-1">
         {children}
       </main>
       <Footer />
-      
-      {/* 2. วางกล่องแชทไว้ตรงนี้ เพื่อให้มันลอยอยู่ทุกหน้า */}
-      <ChatWidget />
+      {/* นำ <ChatWidget /> ออกเรียบร้อยแล้ว เพื่อเพิ่มความเร็วระบบ */}
     </div>
   );
 }

@@ -36,17 +36,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // ตรวจสอบ Session เมื่อโหลดหน้าเว็บครั้งแรก
     const initializeAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        setUser(session.user);
-        const userRole = await fetchUserRole(session.user.id);
-        setRole(userRole);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        // --- จุดที่แก้ไข: ดักจับ Error โทเค็นหมดอายุ (ป้องกันหน้าจอหมุนค้าง) ---
+        if (error) {
+          console.error('Session error:', error.message);
+          // ถ้าคุกกี้/โทเค็นพัง ให้บังคับออกจากระบบทันที เพื่อเคลียร์ค่าที่ค้างอยู่
+          await supabase.auth.signOut();
+          return;
+        }
+        
+        if (session?.user) {
+          setUser(session.user);
+          const userRole = await fetchUserRole(session.user.id);
+          setRole(userRole);
+        }
+      } catch (err) {
+        console.error('Unexpected auth error:', err);
+      } finally {
+        // สำคัญที่สุด: สั่งให้ "หยุดหมุน" เสมอ ไม่ว่าจะดึงข้อมูลสำเร็จหรือล้มเหลว
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     initializeAuth();
